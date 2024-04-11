@@ -6,6 +6,7 @@
 
 #define Vsupply 5 
 #define Threshold 1  
+#define PIRThreshold 0.5f
 
 // Two inputs, reset and set 
 AnalogIn Trigger(A0);
@@ -57,19 +58,17 @@ void CheckIfTriggered(void) {
     }
 }
 // PIR SENSING
-void RotateServo(void) {
+bool RotateServo(void) {
     // Return upon finding the first signal from the PIR
-    for (int i = 0; i < 4; i++) {
-        // Delay time for PIRs is 2 seconds so wait maybe? 
-        // TODO: could be bad in practice
-        ThisThread::sleep_for(1s);
-        if (PIRARRAY[i] > 0) {
+    for (int i = 1; i < 5; i++) {
+        if (PIRARRAY[i-1] > PIRThreshold) {
             RCServo.position(45*i);
-            cout << "PIR " << i << " triggered!" << endl;
-            return;
+            cout << "PIR" << i << " triggered at level " << PIRARRAY[i-1].read() << endl;
+            cout << "Rotate servo to " << 45*i << " degrees!" << endl;
+            return true;
         }
     }
-    return;
+    return false;
 }
 
 int main(void)
@@ -92,17 +91,21 @@ int main(void)
         // CheckMicThreshold(); <= @jacob, uncomment when you hook up
 
         if (OUTPUT > 0) { // Actually do the things
-            RotateServo();
-            Solenoid = 5; // <= @ryan, this is where you'll have to experiment
+            bool ANNIHILATE_HUMAN = RotateServo();
+            if (ANNIHILATE_HUMAN) {
+                // Send a signal to open the solenoid valve through PMOS
+                Solenoid = 5;
+                cout << "\n\rMovement detected, spray human" << endl;
+                ThisThread::sleep_for(1s);
+            }
+            // Then close after human found (or continuously keep NCSolenoid closed)
+            Solenoid = 0;
         } 
-        Solenoid = 0;  // <= @gabe, closing solenoid valve so it doesn't constantly spray, 
-                       //    will reopen whenever it detects next move (and it's triggered)
-        
         // Print Analog Values to screen
         cout << "\n\rTrigger Voltage: " << getTriggered() << endl;
         cout << "\n\rMicrophone Voltage: " << getMicVoltage() << endl;
         cout << "\n\rOutput Voltage: " << OUTPUT << endl;
 
-        wait_us(100000); // Wait 0.1 second before repeating the loop.
+        wait_us(1000000); // Wait 0.1 second before repeating the loop.
     }
 }
